@@ -18,8 +18,8 @@ public class Server {
     private ExecutorService threadPool;
     private static Set<ClientConnectionHandler> clientSet;
 
-    public Server(int numberOfThreads) throws IOException {
-        this.serverSocket = new ServerSocket(7777);
+    public Server(int numberOfThreads, int port) throws IOException {
+        this.serverSocket = new ServerSocket(port);
         this.threadPool = Executors.newFixedThreadPool(numberOfThreads);
         clientSet = Collections.synchronizedSet(new HashSet<>());
         logger.info("Server started on port {}", serverSocket.getLocalPort());
