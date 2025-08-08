@@ -9,7 +9,6 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 
 public class ClientConnectionHandler implements Runnable {
     private static final Logger log = LoggerFactory.getLogger(ClientConnectionHandler.class);
@@ -18,54 +17,38 @@ public class ClientConnectionHandler implements Runnable {
     PrintWriter out;
     String userName;
 
-    String terminationCharacter = "!";
-    public ClientConnectionHandler(Socket socket) {
+    String terminationTrigger = "exit";
+    public ClientConnectionHandler(Socket socket) throws IOException {
         this.socket = socket;
-        try {
-            in = new BufferedInputStream(socket.getInputStream());
-            out = new PrintWriter(socket.getOutputStream());
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+        in = new BufferedInputStream(socket.getInputStream());
+        out = new PrintWriter(socket.getOutputStream());
     }
 
     @Override
     public void run() {
         Thread.currentThread().setName("ClientConnectionHandler");
         try {
-            while (true){
-                byte[] reader = new byte[1024];
-                int read = in.read(reader);
-                log.info("Client received: " + new String(reader, StandardCharsets.UTF_8));
-                if(read == -1){
-                    log.info("Client disconnected");
+            byte[] reader = new byte[1024];
+            while (in.read(reader) != -1) {
+                String message = new String(reader, StandardCharsets.UTF_8).trim();
+                if(message.equals(terminationTrigger)) {
+                    log.info("Cutting communication with client.");
                     break;
                 }
-
-                if(Arrays.equals(terminationCharacter.getBytes(StandardCharsets.UTF_8), Arrays.copyOfRange(reader, 0, terminationCharacter.length()))) {
-                    log.info("Received termination character exiting communication");
-                    break;
-                }
-
-                Server.broadcast(new String(reader, StandardCharsets.UTF_8), this);
+                Server.broadcast(message, this);
+                reader = new byte[1024]; // Clear out previous buffer;
             }
-
-            boolean removedClientFromServer =  Server.getClientSet().remove(this);
-
-            if(removedClientFromServer){
-                log.info("Successfully removed client from system.");
-            }
-
         } catch (IOException e) {
             throw new RuntimeException(e);
         } finally {
+            log.info("Commencing teardown of socket {}:{}", socket.getInetAddress(), socket.getPort());
+            Server.getClientSet().remove(this);
             try {
-                log.info("Closing socket");
                 in.close();
                 out.close();
                 socket.close();
-            } catch (IOException e) {
-                log.error("Something failed when closing sockets , {}", e.getMessage());
+            } catch (Exception e) {
+                log.error("Failed to close socket {}:{}", socket.getInetAddress(), socket.getPort());
             }
         }
     }
